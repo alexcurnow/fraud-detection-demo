@@ -109,6 +109,33 @@ async def root():
     }
 
 
+@app.get("/users/search")
+async def search_users(
+    q: str = Query(..., min_length=1, description="Search query (email or account ID)")
+):
+    """
+    Search users by email or account ID for autocomplete.
+
+    Returns matching users with basic info.
+    """
+    users = Database.fetch_all(
+        """
+        SELECT account_id, user_email
+        FROM accounts
+        WHERE status = 'active'
+        AND (user_email LIKE ? OR account_id LIKE ?)
+        ORDER BY user_email
+        LIMIT 10
+        """,
+        (f"%{q}%", f"%{q}%")
+    )
+
+    return [
+        {"account_id": u["account_id"], "email": u["user_email"]}
+        for u in users
+    ]
+
+
 @app.get("/users", response_model=UserListResponse)
 async def list_users(
     limit: int = Query(20, ge=1, le=100, description="Number of users to return")
