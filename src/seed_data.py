@@ -166,6 +166,22 @@ class SeedDataGenerator:
             )
             EventStore.append(account_event)
 
+            # Register primary device
+            device_event = DeviceChanged(
+                aggregate_id=account_id,
+                account_id=account_id,
+                new_device_id=user.primary_device,
+                device_type=random.choice(['mobile', 'desktop', 'tablet']),
+                browser=random.choice(['Chrome', 'Firefox', 'Safari']),
+                os=random.choice(['Windows', 'macOS', 'iOS', 'Android']),
+                timestamp=account_event.timestamp,
+                metadata=EventMetadata(
+                    ip_address=user.home_ip,
+                    device_id=user.primary_device
+                )
+            )
+            EventStore.append(device_event)
+
             # Initial login
             login_event = LoginAttempted(
                 aggregate_id=f"session_{uuid.uuid4().hex[:8]}",
