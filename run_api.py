@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Run the Fraud Detection API server.
 
@@ -10,6 +11,7 @@ API documentation at http://localhost:8000/docs
 
 import uvicorn
 import logging
+import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,6 +19,9 @@ logging.basicConfig(
 )
 
 if __name__ == "__main__":
+    # Disable auto-reload in production (Docker)
+    is_production = os.getenv("ENVIRONMENT") == "production"
+
     print("=" * 80)
     print("Starting Fraud Detection API Server")
     print("=" * 80)
@@ -34,6 +39,6 @@ if __name__ == "__main__":
         "src.api.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,  # Auto-reload on code changes
+        reload=not is_production,  # Auto-reload only in development
         log_level="info"
     )

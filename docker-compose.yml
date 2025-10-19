@@ -1,0 +1,47 @@
+# Docker Compose - orchestrates multiple containers
+# Run with: docker-compose up
+
+services:
+  # Backend API service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fraud-detection-api
+    ports:
+      - "8000:8000"  # Map host:container ports
+    volumes:
+      # Mount database and models for persistence
+      - ./fraud_detection.db:/app/fraud_detection.db
+      - ./models:/app/models
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fraud-detection-frontend
+    ports:
+      - "3000:3000"  # SvelteKit runs on port 3000 with adapter-node
+    environment:
+      # Tell frontend where to find the API
+      - VITE_API_URL=http://localhost:8000
+      - ORIGIN=http://localhost:3000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+# Optional: define a network for container communication
+networks:
+  default:
+    name: fraud-detection-network
