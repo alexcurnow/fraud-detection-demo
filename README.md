@@ -17,7 +17,7 @@ Real-time fraud detection system with event sourcing architecture, ML-based anom
 
 ```bash
 # Clone the repository
-git clone <your-repo-url>
+git clone https://github.com/alexcurnow/fraud-detection-demo.git
 cd fraud-detector
 
 # Seed database and train ML model (one-time setup)
