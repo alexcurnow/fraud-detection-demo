@@ -108,7 +108,10 @@ class TransactionProjection(EventProcessor):
         logger.debug(f"Transaction failed: {event.aggregate_id} - {event.reason}")
 
     def _handle_fraud_flag_raised(self, event: FraudFlagRaised) -> None:
-        """Update transaction status to flagged."""
+        """Update transaction status to flagged and save fraud score."""
+        import json
+
+        # Update transaction status
         Database.execute(
             """
             UPDATE transactions
@@ -118,4 +121,33 @@ class TransactionProjection(EventProcessor):
             """,
             (event.transaction_id,)
         )
+
+        # Save fraud score details
+        Database.execute(
+            """
+            INSERT INTO fraud_scores (
+                transaction_id,
+                fraud_probability,
+                is_fraud,
+                model_version,
+                flagged_reasons,
+                scored_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(transaction_id) DO UPDATE SET
+                fraud_probability = excluded.fraud_probability,
+                is_fraud = excluded.is_fraud,
+                model_version = excluded.model_version,
+                flagged_reasons = excluded.flagged_reasons,
+                scored_at = excluded.scored_at
+            """,
+            (
+                event.transaction_id,
+                event.fraud_probability,
+                True,
+                event.model_version,
+                json.dumps(event.flagged_reasons),
+                event.timestamp.isoformat()
+            )
+        )
+
         logger.debug(f"Transaction flagged: {event.transaction_id}")

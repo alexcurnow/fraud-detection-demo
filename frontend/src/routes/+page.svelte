@@ -8,6 +8,7 @@
 	let transactionResult = $state<any>(null);
 	let flaggedTransactions = $state<any[]>([]);
 	let isLoading = $state(false);
+	let stats = $state<any>(null);
 
 	// Transaction form state
 	let amount = $state('');
@@ -80,7 +81,7 @@
 	// Load flagged transactions
 	async function loadFlaggedTransactions() {
 		try {
-			const res = await fetch(`${API_BASE}/transactions/flagged?limit=5`);
+			const res = await fetch(`${API_BASE}/transactions/flagged?limit=10`);
 			const data = await res.json();
 			flaggedTransactions = data.transactions;
 		} catch (err) {
@@ -88,9 +89,49 @@
 		}
 	}
 
-	// Load flagged transactions on mount
+	// Load statistics
+	async function loadStats() {
+		try {
+			const res = await fetch(`${API_BASE}/users?limit=100`);
+			const data = await res.json();
+
+			// Calculate stats
+			const totalUsers = data.total;
+			const totalFraudFlags = data.users.reduce((sum: number, u: any) => sum + u.fraud_flags, 0);
+			const usersWithFraud = data.users.filter((u: any) => u.fraud_flags > 0).length;
+
+			// Count fraud reasons from flagged transactions
+			const reasonCounts: Record<string, number> = {};
+			flaggedTransactions.forEach(txn => {
+				txn.flagged_reasons.forEach((reason: string) => {
+					reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+				});
+			});
+
+			stats = {
+				totalUsers,
+				totalFraudFlags,
+				usersWithFraud,
+				fraudRate: totalUsers > 0 ? ((usersWithFraud / totalUsers) * 100).toFixed(1) : '0',
+				topReasons: Object.entries(reasonCounts)
+					.sort(([, a], [, b]) => (b as number) - (a as number))
+					.slice(0, 5)
+					.map(([reason, count]) => ({ reason, count }))
+			};
+		} catch (err) {
+			console.error('Failed to load stats:', err);
+		}
+	}
+
+	// Load data on mount and after transactions
 	$effect(() => {
 		loadFlaggedTransactions();
+	});
+
+	$effect(() => {
+		if (flaggedTransactions.length > 0) {
+			loadStats();
+		}
 	});
 </script>
 
@@ -101,6 +142,56 @@
 			<h1 class="text-4xl font-bold text-gray-900 mb-2">Fraud Detection Demo</h1>
 			<p class="text-gray-600">Select a user and test transaction fraud detection in real-time</p>
 		</div>
+
+		<!-- Statistics Dashboard -->
+		{#if stats}
+			<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+				<div class="bg-white rounded-lg shadow-sm p-6">
+					<div class="text-sm font-medium text-gray-500 mb-1">Total Users</div>
+					<div class="text-3xl font-bold text-gray-900">{stats.totalUsers}</div>
+				</div>
+
+				<div class="bg-white rounded-lg shadow-sm p-6">
+					<div class="text-sm font-medium text-gray-500 mb-1">Fraud Flags</div>
+					<div class="text-3xl font-bold text-red-600">{stats.totalFraudFlags}</div>
+				</div>
+
+				<div class="bg-white rounded-lg shadow-sm p-6">
+					<div class="text-sm font-medium text-gray-500 mb-1">Users with Fraud</div>
+					<div class="text-3xl font-bold text-orange-600">{stats.usersWithFraud}</div>
+				</div>
+
+				<div class="bg-white rounded-lg shadow-sm p-6">
+					<div class="text-sm font-medium text-gray-500 mb-1">Fraud Rate</div>
+					<div class="text-3xl font-bold text-purple-600">{stats.fraudRate}%</div>
+				</div>
+			</div>
+
+			<!-- Top Fraud Reasons -->
+			{#if stats.topReasons.length > 0}
+				<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+					<h2 class="text-lg font-bold text-gray-900 mb-4">Top Fraud Indicators</h2>
+					<div class="space-y-3">
+						{#each stats.topReasons as { reason, count }}
+							<div class="flex items-center justify-between">
+								<span class="text-sm font-medium text-gray-700">
+									{reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+								</span>
+								<div class="flex items-center gap-3">
+									<div class="w-32 bg-gray-200 rounded-full h-2">
+										<div
+											class="bg-red-600 h-2 rounded-full"
+											style="width: {(count / stats.topReasons[0].count) * 100}%"
+										></div>
+									</div>
+									<span class="text-sm font-semibold text-gray-900 w-8 text-right">{count}</span>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+		{/if}
 
 		<!-- User Search -->
 		<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
@@ -356,7 +447,12 @@
 		<!-- Flagged Transactions -->
 		{#if flaggedTransactions.length > 0}
 			<div class="bg-white rounded-lg shadow-sm p-6">
-				<h2 class="text-xl font-bold text-gray-900 mb-4">Recent Flagged Transactions</h2>
+				<div class="flex items-center justify-between mb-4">
+					<h2 class="text-xl font-bold text-gray-900">Recent Flagged Transactions</h2>
+					<span class="px-3 py-1 bg-red-100 text-red-800 text-sm font-medium rounded-full">
+						{flaggedTransactions.length} flagged
+					</span>
+				</div>
 				<div class="overflow-x-auto">
 					<table class="w-full">
 						<thead class="bg-gray-50 border-b">
@@ -382,8 +478,14 @@
 											{(txn.risk_score * 100).toFixed(0)}%
 										</span>
 									</td>
-									<td class="px-4 py-3 text-xs text-gray-600">
-										{txn.flagged_reasons.slice(0, 2).join(', ')}
+									<td class="px-4 py-3">
+										<div class="flex flex-wrap gap-1">
+											{#each txn.flagged_reasons.slice(0, 3) as reason}
+												<span class="inline-flex px-2 py-1 text-xs font-medium rounded bg-red-50 text-red-700 border border-red-200">
+													{reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+												</span>
+											{/each}
+										</div>
 									</td>
 								</tr>
 							{/each}
