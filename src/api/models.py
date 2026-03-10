@@ -84,3 +84,68 @@ class FlaggedTransactionsListResponse(BaseModel):
     """Response for GET /transactions/flagged"""
     total: int
     transactions: List[FlaggedTransactionResponse]
+
+
+# ============================================================================
+# NETWORK ANALYSIS MODELS (Phase 2)
+# ============================================================================
+
+class FraudRingResponse(BaseModel):
+    """A detected fraud ring pattern."""
+    ring_type: str = Field(description="Type: device_sharing, money_mule, merchant_collusion, etc.")
+    confidence: str = Field(default="high", description="Confidence level: low, medium, high")
+    accounts: List[str] = Field(description="Account IDs involved in ring")
+    account_count: int
+    metadata: dict = Field(description="Ring-specific details")
+
+
+class FraudRingsResponse(BaseModel):
+    """Response for GET /network/rings"""
+    total_rings: int
+    rings_by_type: dict = Field(description="Rings grouped by type")
+    all_rings: List[FraudRingResponse]
+
+
+class NetworkNode(BaseModel):
+    """Graph node for visualization."""
+    id: str
+    label: str = Field(description="Node type: User, Device, Merchant, Transaction, Location")
+    properties: dict
+
+
+class NetworkEdge(BaseModel):
+    """Graph edge/relationship for visualization."""
+    source: str
+    target: str
+    type: str = Field(description="Relationship type: OWNS, MAKES, TRANSFERS_TO, etc.")
+    properties: dict = Field(default_factory=dict)
+
+
+class NetworkGraphResponse(BaseModel):
+    """Response for GET /network/visualize/{user_id}"""
+    account_id: str
+    nodes: List[NetworkNode]
+    edges: List[NetworkEdge]
+    node_count: int
+    edge_count: int
+
+
+# ============================================================================
+# LLM EXPLANATION MODELS (Phase 2)
+# ============================================================================
+
+class ExplanationResponse(BaseModel):
+    """LLM-generated explanation."""
+    explanation: str = Field(description="Natural language explanation")
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    model: str = Field(default="llama3.2")
+
+
+class ExecutiveSummaryResponse(BaseModel):
+    """Executive summary of fraud activity."""
+    summary: str
+    total_flagged_transactions: int
+    total_fraud_rings: int
+    total_risk_exposure: float
+    priority_actions: List[str] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=datetime.utcnow)

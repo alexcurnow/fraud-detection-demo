@@ -1,11 +1,19 @@
 """
 FastAPI application for interactive fraud detection demo.
 
-Endpoints:
+Phase 1 Endpoints:
 - GET /users - List all users with their transaction patterns
 - GET /users/{user_id} - Get specific user details
 - POST /users/{user_id}/transactions - Create and score a new transaction
 - GET /transactions/flagged - View all flagged transactions
+
+Phase 2 Endpoints:
+- GET /network/rings - Detect fraud rings
+- GET /network/user/{user_id} - Get user's transaction network
+- GET /network/visualize/{user_id} - Graph visualization data
+- POST /explain/transaction/{id} - LLM explanation for transaction
+- POST /explain/network/{type} - LLM explanation for fraud ring
+- POST /explain/summary - Executive summary
 """
 
 import logging
@@ -26,6 +34,8 @@ from .models import (
     FlaggedTransactionResponse,
     FlaggedTransactionsListResponse
 )
+from .network_routes import router as network_router  # Phase 2
+from .explanation_routes import router as explanation_router  # Phase 2
 from ..database import Database
 from ..models import FraudDetectionModel, FraudFeatureExtractor
 from ..events import (
@@ -42,6 +52,7 @@ from ..projections import (
     DeviceProjection,
     LocationProjection
 )
+from ..graph import GraphDatabase, GraphProjection  # Phase 2
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,8 +60,8 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="Fraud Detection Demo API",
-    description="Interactive fraud detection system with event sourcing and ML",
-    version="1.0.0"
+    description="Interactive fraud detection system with event sourcing, ML, and network analysis",
+    version="2.0.0"  # Phase 2
 )
 
 # Add CORS middleware for frontend access
@@ -62,6 +73,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include Phase 2 routers
+app.include_router(network_router)
+app.include_router(explanation_router)
+
 # Global state
 ml_model: Optional[FraudDetectionModel] = None
 event_handler: Optional[EventHandler] = None
@@ -69,14 +84,22 @@ event_handler: Optional[EventHandler] = None
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database, ML model, and event processors on startup."""
+    """Initialize database, ML model, event processors, and Neo4j on startup."""
     global ml_model, event_handler
 
-    logger.info("Starting Fraud Detection API...")
+    logger.info("Starting Fraud Detection API (Phase 2)...")
 
-    # Initialize database
+    # Initialize SQLite database
     Database.get_connection()
-    logger.info("✓ Database connected")
+    logger.info("✓ SQLite database connected")
+
+    # Initialize Neo4j graph database
+    try:
+        GraphDatabase.get_driver()
+        logger.info("✓ Neo4j graph database connected")
+    except Exception as e:
+        logger.warning(f"⚠ Neo4j connection failed: {e}")
+        logger.warning("  Network analysis endpoints will not work without Neo4j")
 
     # Load ML model
     ml_model = FraudDetectionModel()
@@ -87,13 +110,20 @@ async def startup_event():
         logger.warning("⚠ No trained model found. Please train a model first.")
         ml_model = None
 
-    # Initialize event processors
+    # Initialize event processors (Phase 1)
     event_handler = EventHandler()
     event_handler.register(AccountProjection())
     event_handler.register(TransactionProjection())
     event_handler.register(DeviceProjection())
     event_handler.register(LocationProjection())
-    logger.info("✓ Event processors registered")
+
+    # Register Phase 2 graph projection
+    try:
+        event_handler.register(GraphProjection())
+        logger.info("✓ Event processors registered (including GraphProjection)")
+    except Exception as e:
+        logger.warning(f"⚠ Failed to register GraphProjection: {e}")
+        logger.info("✓ Event processors registered (Phase 1 only)")
 
     logger.info("🚀 Fraud Detection API ready!")
 

@@ -141,6 +141,22 @@ class FraudFlagRaised(BaseEvent):
 
 
 # ============================================================================
+# TRANSFER EVENTS
+# ============================================================================
+
+class FundsTransferred(BaseEvent):
+    """Funds transferred between accounts."""
+    event_type: str = "FundsTransferred"
+    aggregate_type: str = "Transfer"
+    from_account_id: str
+    to_account_id: str
+    amount: float
+    currency: str = "USD"
+    transfer_type: Optional[str] = None  # "p2p", "wire", "ach", etc.
+    reference: Optional[str] = None
+
+
+# ============================================================================
 # EVENT REGISTRY
 # ============================================================================
 
@@ -153,6 +169,7 @@ EVENT_TYPES = {
     "DeviceChanged": DeviceChanged,
     "LocationChanged": LocationChanged,
     "FraudFlagRaised": FraudFlagRaised,
+    "FundsTransferred": FundsTransferred,
 }
 
 
